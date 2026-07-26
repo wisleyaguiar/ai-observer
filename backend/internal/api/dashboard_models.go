@@ -34,6 +34,7 @@ type WidgetConfig struct {
 	BreakdownAttribute string `json:"breakdownAttribute,omitempty"`
 	BreakdownValue     string `json:"breakdownValue,omitempty"`
 	ChartStacked       *bool  `json:"chartStacked,omitempty"`
+	LogSearch          string `json:"logSearch,omitempty"`
 }
 
 // DashboardWithWidgets represents a full dashboard with its widgets

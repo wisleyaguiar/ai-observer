@@ -5,6 +5,7 @@ import type { TraceOverview } from '@/types/traces'
 import { StatsWidget } from './StatsWidget'
 import { ActiveServicesWidget } from './ActiveServicesWidget'
 import { RecentTracesWidget } from './RecentTracesWidget'
+import { RecentLogsWidget } from './RecentLogsWidget'
 import { MetricValueWidget } from './MetricValueWidget'
 import { MetricChartWidget } from './MetricChartWidget'
 
@@ -51,6 +52,16 @@ export function WidgetRenderer({
         <RecentTracesWidget
           title={widget.title}
           traces={recentTraces}
+        />
+      )
+
+    case WIDGET_TYPES.RECENT_LOGS:
+      return (
+        <RecentLogsWidget
+          title={widget.title}
+          config={widget.config}
+          fromTime={fromTime}
+          toTime={toTime}
         />
       )
 

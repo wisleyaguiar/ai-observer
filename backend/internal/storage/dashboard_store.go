@@ -456,6 +456,9 @@ func scanWidgetConfig(v interface{}) api.WidgetConfig {
 		if cs, ok := val["chartStacked"].(bool); ok {
 			config.ChartStacked = &cs
 		}
+		if ls, ok := val["logSearch"].(string); ok {
+			config.LogSearch = ls
+		}
 	case string:
 		if val == "" || val == "{}" {
 			return config

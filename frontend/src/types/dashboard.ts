@@ -4,6 +4,7 @@ export interface WidgetConfig {
   breakdownAttribute?: string // Attribute key to use for series breakdown (e.g., "type", "model")
   breakdownValue?: string // Specific breakdown value to filter by (for metric_value widgets)
   chartStacked?: boolean // Whether to stack bars (default: true)
+  logSearch?: string // Free-text/event-name filter for recent_logs widgets (e.g., "user_prompt")
 }
 
 export interface DashboardWidget {
@@ -91,6 +92,7 @@ export const WIDGET_TYPES = {
   STATS_ERROR_RATE: 'stats_error_rate',
   ACTIVE_SERVICES: 'active_services',
   RECENT_ACTIVITY: 'recent_activity',
+  RECENT_LOGS: 'recent_logs',
   METRIC_VALUE: 'metric_value',
   METRIC_CHART: 'metric_chart',
 } as const
@@ -161,6 +163,15 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     defaultColSpan: 4,
     defaultRowSpan: 1,
     configurable: false,
+    category: 'builtin',
+  },
+  {
+    type: WIDGET_TYPES.RECENT_LOGS,
+    label: 'Recent Logs',
+    description: 'Shows recent log records, optionally filtered by event or text',
+    defaultColSpan: 4,
+    defaultRowSpan: 1,
+    configurable: true,
     category: 'builtin',
   },
   {
