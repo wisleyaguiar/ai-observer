@@ -399,6 +399,7 @@ func (s *DuckDBStore) QueryMetricSeries(ctx context.Context, metricName, service
 				ServiceName,
 				COALESCE(NULLIF(Attributes->>'type', ''), NULLIF(Attributes->>'gen_ai.token.type', ''), 'default') as attr_type,
 				COALESCE(NULLIF(Attributes->>'model', ''), 'default') as attr_model,
+				COALESCE(NULLIF(Attributes->>'query_source', ''), 'default') as attr_query_source,
 				%s as agg_value
 			FROM otel_metrics
 			WHERE Timestamp >= ?::TIMESTAMP AND Timestamp <= ?::TIMESTAMP
@@ -411,7 +412,7 @@ func (s *DuckDBStore) QueryMetricSeries(ctx context.Context, metricName, service
 			args = append(args, service)
 		}
 
-		query += " GROUP BY ServiceName, attr_type, attr_model"
+		query += " GROUP BY ServiceName, attr_type, attr_model, attr_query_source"
 	} else {
 		// Construct interval string from seconds (e.g., "60 seconds")
 		intervalStr := fmt.Sprintf("%d seconds", intervalSeconds)
@@ -437,7 +438,9 @@ func (s *DuckDBStore) QueryMetricSeries(ctx context.Context, metricName, service
 			series_labels AS (
 				SELECT DISTINCT
 					ServiceName,
-					COALESCE(Attributes->>'type', Attributes->>'gen_ai.token.type', 'default') as attr_type
+					COALESCE(Attributes->>'type', Attributes->>'gen_ai.token.type', 'default') as attr_type,
+					COALESCE(NULLIF(Attributes->>'model', ''), 'default') as attr_model,
+					COALESCE(NULLIF(Attributes->>'query_source', ''), 'default') as attr_query_source
 				FROM otel_metrics
 				WHERE Timestamp >= ?::TIMESTAMP AND Timestamp <= ?::TIMESTAMP
 					AND MetricName = ?
@@ -449,25 +452,31 @@ func (s *DuckDBStore) QueryMetricSeries(ctx context.Context, metricName, service
 					time_bucket(INTERVAL '%[1]s', Timestamp) as bucket,
 					ServiceName,
 					COALESCE(Attributes->>'type', Attributes->>'gen_ai.token.type', 'default') as attr_type,
+					COALESCE(NULLIF(Attributes->>'model', ''), 'default') as attr_model,
+					COALESCE(NULLIF(Attributes->>'query_source', ''), 'default') as attr_query_source,
 					%[2]s as agg_value
 				FROM otel_metrics
 				WHERE Timestamp >= ?::TIMESTAMP AND Timestamp <= ?::TIMESTAMP
 					AND MetricName = ?
 					AND (Value IS NOT NULL OR Sum IS NOT NULL)
 					%[3]s
-				GROUP BY bucket, ServiceName, attr_type
+				GROUP BY bucket, ServiceName, attr_type, attr_model, attr_query_source
 			)
 			SELECT
 				b.bucket,
 				s.ServiceName,
 				s.attr_type,
+				s.attr_model,
+				s.attr_query_source,
 				COALESCE(d.agg_value, 0) as agg_value
 			FROM buckets b
 			CROSS JOIN series_labels s
 			LEFT JOIN data d ON b.bucket = d.bucket
 				AND s.ServiceName = d.ServiceName
 				AND s.attr_type = d.attr_type
-			ORDER BY b.bucket, s.ServiceName, s.attr_type
+				AND s.attr_model = d.attr_model
+				AND s.attr_query_source = d.attr_query_source
+			ORDER BY b.bucket, s.ServiceName, s.attr_type, s.attr_model, s.attr_query_source
 		`, intervalStr, aggFunction, serviceFilter)
 
 		// Update args: buckets CTE needs from, to; series_labels needs from, to, metricName, [service]; data needs from, to, metricName, [service]
@@ -492,19 +501,23 @@ func (s *DuckDBStore) QueryMetricSeries(ctx context.Context, metricName, service
 			var serviceName string
 			var attrType string
 			var attrModel string
+			var attrQuerySource string
 			var value float64
 
-			if err := rows.Scan(&serviceName, &attrType, &attrModel, &value); err != nil {
+			if err := rows.Scan(&serviceName, &attrType, &attrModel, &attrQuerySource, &value); err != nil {
 				return nil, fmt.Errorf("scanning metric aggregate: %w", err)
 			}
 
-			key := serviceName + ":" + attrType + ":" + attrModel
+			key := serviceName + ":" + attrType + ":" + attrModel + ":" + attrQuerySource
 			labels := map[string]string{"service": serviceName}
 			if attrType != "default" {
 				labels["type"] = attrType
 			}
 			if attrModel != "default" {
 				labels["model"] = attrModel
+			}
+			if attrQuerySource != "default" {
+				labels["query_source"] = attrQuerySource
 			}
 			seriesMap[key] = &api.TimeSeries{
 				Name:       metricName,
@@ -521,17 +534,25 @@ func (s *DuckDBStore) QueryMetricSeries(ctx context.Context, metricName, service
 			var bucket time.Time
 			var serviceName string
 			var attrType string
+			var attrModel string
+			var attrQuerySource string
 			var value float64
 
-			if err := rows.Scan(&bucket, &serviceName, &attrType, &value); err != nil {
+			if err := rows.Scan(&bucket, &serviceName, &attrType, &attrModel, &attrQuerySource, &value); err != nil {
 				return nil, fmt.Errorf("scanning metric series: %w", err)
 			}
 
-			key := serviceName + ":" + attrType
+			key := serviceName + ":" + attrType + ":" + attrModel + ":" + attrQuerySource
 			if _, ok := seriesMap[key]; !ok {
 				labels := map[string]string{"service": serviceName}
 				if attrType != "default" {
 					labels["type"] = attrType
+				}
+				if attrModel != "default" {
+					labels["model"] = attrModel
+				}
+				if attrQuerySource != "default" {
+					labels["query_source"] = attrQuerySource
 				}
 				seriesMap[key] = &api.TimeSeries{
 					Name:       metricName,
@@ -741,6 +762,7 @@ func (s *DuckDBStore) queryMetricSeriesInternal(ctx context.Context, metricName,
 				ServiceName,
 				COALESCE(NULLIF(Attributes->>'type', ''), NULLIF(Attributes->>'gen_ai.token.type', ''), 'default') as attr_type,
 				COALESCE(NULLIF(Attributes->>'model', ''), 'default') as attr_model,
+				COALESCE(NULLIF(Attributes->>'query_source', ''), 'default') as attr_query_source,
 				%s as agg_value
 			FROM otel_metrics
 			WHERE Timestamp >= ?::TIMESTAMP AND Timestamp <= ?::TIMESTAMP
@@ -753,7 +775,7 @@ func (s *DuckDBStore) queryMetricSeriesInternal(ctx context.Context, metricName,
 			args = append(args, service)
 		}
 
-		query += " GROUP BY ServiceName, attr_type, attr_model"
+		query += " GROUP BY ServiceName, attr_type, attr_model, attr_query_source"
 	} else {
 		// Construct interval string from seconds (e.g., "60 seconds")
 		intervalStr := fmt.Sprintf("%d seconds", intervalSeconds)
@@ -779,7 +801,9 @@ func (s *DuckDBStore) queryMetricSeriesInternal(ctx context.Context, metricName,
 			series_labels AS (
 				SELECT DISTINCT
 					ServiceName,
-					COALESCE(Attributes->>'type', Attributes->>'gen_ai.token.type', 'default') as attr_type
+					COALESCE(Attributes->>'type', Attributes->>'gen_ai.token.type', 'default') as attr_type,
+					COALESCE(NULLIF(Attributes->>'model', ''), 'default') as attr_model,
+					COALESCE(NULLIF(Attributes->>'query_source', ''), 'default') as attr_query_source
 				FROM otel_metrics
 				WHERE Timestamp >= ?::TIMESTAMP AND Timestamp <= ?::TIMESTAMP
 					AND MetricName = ?
@@ -791,25 +815,31 @@ func (s *DuckDBStore) queryMetricSeriesInternal(ctx context.Context, metricName,
 					time_bucket(INTERVAL '%[1]s', Timestamp) as bucket,
 					ServiceName,
 					COALESCE(Attributes->>'type', Attributes->>'gen_ai.token.type', 'default') as attr_type,
+					COALESCE(NULLIF(Attributes->>'model', ''), 'default') as attr_model,
+					COALESCE(NULLIF(Attributes->>'query_source', ''), 'default') as attr_query_source,
 					%[2]s as agg_value
 				FROM otel_metrics
 				WHERE Timestamp >= ?::TIMESTAMP AND Timestamp <= ?::TIMESTAMP
 					AND MetricName = ?
 					AND (Value IS NOT NULL OR Sum IS NOT NULL)
 					%[3]s
-				GROUP BY bucket, ServiceName, attr_type
+				GROUP BY bucket, ServiceName, attr_type, attr_model, attr_query_source
 			)
 			SELECT
 				b.bucket,
 				s.ServiceName,
 				s.attr_type,
+				s.attr_model,
+				s.attr_query_source,
 				COALESCE(d.agg_value, 0) as agg_value
 			FROM buckets b
 			CROSS JOIN series_labels s
 			LEFT JOIN data d ON b.bucket = d.bucket
 				AND s.ServiceName = d.ServiceName
 				AND s.attr_type = d.attr_type
-			ORDER BY b.bucket, s.ServiceName, s.attr_type
+				AND s.attr_model = d.attr_model
+				AND s.attr_query_source = d.attr_query_source
+			ORDER BY b.bucket, s.ServiceName, s.attr_type, s.attr_model, s.attr_query_source
 		`, intervalStr, aggFunction, serviceFilter)
 
 		// Update args: buckets CTE needs from, to; series_labels needs from, to, metricName, [service]; data needs from, to, metricName, [service]
@@ -833,19 +863,23 @@ func (s *DuckDBStore) queryMetricSeriesInternal(ctx context.Context, metricName,
 			var serviceName string
 			var attrType string
 			var attrModel string
+			var attrQuerySource string
 			var value float64
 
-			if err := rows.Scan(&serviceName, &attrType, &attrModel, &value); err != nil {
+			if err := rows.Scan(&serviceName, &attrType, &attrModel, &attrQuerySource, &value); err != nil {
 				return nil, fmt.Errorf("scanning metric aggregate: %w", err)
 			}
 
-			key := serviceName + ":" + attrType + ":" + attrModel
+			key := serviceName + ":" + attrType + ":" + attrModel + ":" + attrQuerySource
 			labels := map[string]string{"service": serviceName}
 			if attrType != "default" {
 				labels["type"] = attrType
 			}
 			if attrModel != "default" {
 				labels["model"] = attrModel
+			}
+			if attrQuerySource != "default" {
+				labels["query_source"] = attrQuerySource
 			}
 			seriesMap[key] = &api.TimeSeries{
 				Name:       metricName,
@@ -861,17 +895,25 @@ func (s *DuckDBStore) queryMetricSeriesInternal(ctx context.Context, metricName,
 			var bucket time.Time
 			var serviceName string
 			var attrType string
+			var attrModel string
+			var attrQuerySource string
 			var value float64
 
-			if err := rows.Scan(&bucket, &serviceName, &attrType, &value); err != nil {
+			if err := rows.Scan(&bucket, &serviceName, &attrType, &attrModel, &attrQuerySource, &value); err != nil {
 				return nil, fmt.Errorf("scanning metric series: %w", err)
 			}
 
-			key := serviceName + ":" + attrType
+			key := serviceName + ":" + attrType + ":" + attrModel + ":" + attrQuerySource
 			if _, ok := seriesMap[key]; !ok {
 				labels := map[string]string{"service": serviceName}
 				if attrType != "default" {
 					labels["type"] = attrType
+				}
+				if attrModel != "default" {
+					labels["model"] = attrModel
+				}
+				if attrQuerySource != "default" {
+					labels["query_source"] = attrQuerySource
 				}
 				seriesMap[key] = &api.TimeSeries{
 					Name:       metricName,
