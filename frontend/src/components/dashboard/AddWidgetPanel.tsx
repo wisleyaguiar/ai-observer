@@ -34,6 +34,15 @@ function isSharedGenAIMetric(metricName: string): boolean {
   return metricName.startsWith('gen_ai.')
 }
 
+// 0 follows the dashboard timeframe. 5h matches the Claude plan rate-limit window.
+const BUCKET_OPTIONS = [
+  { label: 'Auto (dashboard timeframe)', seconds: 0 },
+  { label: '5 minutes', seconds: 300 },
+  { label: '1 hour', seconds: 3600 },
+  { label: '5 hours (rate-limit window)', seconds: 18000 },
+  { label: '1 day', seconds: 86400 },
+]
+
 export function AddWidgetPanel() {
   const { isAddPanelOpen, setAddPanelOpen, widgets, addWidget, targetPosition, setTargetPosition } = useDashboardStore()
   const [services, setServices] = useState<string[]>([])
@@ -46,6 +55,8 @@ export function AddWidgetPanel() {
   const [breakdownValues, setBreakdownValues] = useState<string[]>([])
   const [loadingBreakdownValues, setLoadingBreakdownValues] = useState(false)
   const [chartStacked, setChartStacked] = useState(true)
+  // 0 = follow the dashboard timeframe's bucket size
+  const [bucketInterval, setBucketInterval] = useState(0)
   const [adding, setAdding] = useState(false)
 
   // Get metadata for the selected metric
@@ -303,6 +314,9 @@ export function AddWidgetPanel() {
             ? selectedBreakdownValue
             : undefined,
           chartStacked: selectedWidgetType === 'metric_chart' ? chartStacked : undefined,
+          interval: selectedWidgetType === 'metric_chart' && bucketInterval > 0
+            ? bucketInterval
+            : undefined,
         },
       }
       await addWidget(req)
@@ -314,6 +328,7 @@ export function AddWidgetPanel() {
       setSelectedBreakdownValue('')
       setBreakdownValues([])
       setChartStacked(true)
+      setBucketInterval(0)
     } catch (error) {
       console.error('Failed to add widget:', error)
       toast.error('Failed to add widget')
@@ -559,6 +574,26 @@ export function AddWidgetPanel() {
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
                     Choose how to display multiple series
+                  </p>
+                </div>
+              )}
+
+              {/* Bucket size (only for chart widgets) */}
+              {selectedWidgetType === 'metric_chart' && (
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Bucket Size</label>
+                  <Select
+                    value={String(bucketInterval)}
+                    onChange={(e) => setBucketInterval(Number(e.target.value))}
+                  >
+                    {BUCKET_OPTIONS.map(({ label, seconds }) => (
+                      <option key={seconds} value={seconds}>
+                        {label}
+                      </option>
+                    ))}
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Pin this widget to a fixed bucket, ignoring the dashboard timeframe
                   </p>
                 </div>
               )}

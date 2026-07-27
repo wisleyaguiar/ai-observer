@@ -158,6 +158,9 @@ type MetricQuery struct {
 	Name      string `json:"name"`
 	Service   string `json:"service,omitempty"`
 	Aggregate bool   `json:"aggregate,omitempty"`
+	// Interval overrides the batch-level bucket size, in seconds. Lets a single
+	// widget use its own bucket (e.g. 5h blocks) without changing the dashboard.
+	Interval int64 `json:"interval,omitempty"`
 }
 
 // BatchMetricSeriesResponse contains results for all queried metrics

@@ -67,17 +67,19 @@ export function MetricChartWidget({
 }: MetricChartWidgetProps) {
   // Calculate duration and interval seconds from time selection
   const { durationSeconds, intervalSeconds } = useMemo(() => {
-    if (isAbsoluteTimeSelection(timeSelection)) {
-      return {
-        durationSeconds: (toTime.getTime() - fromTime.getTime()) / 1000,
-        intervalSeconds: timeSelection.range.intervalSeconds,
-      }
-    }
+    const duration = isAbsoluteTimeSelection(timeSelection)
+      ? (toTime.getTime() - fromTime.getTime()) / 1000
+      : timeSelection.timeframe.durationSeconds
+    const timeframeInterval = isAbsoluteTimeSelection(timeSelection)
+      ? timeSelection.range.intervalSeconds
+      : timeSelection.timeframe.intervalSeconds
+    // A widget-pinned bucket drives the tick labels too, otherwise a 5h-bucketed
+    // chart on a 24h dashboard would be labelled as if it were hourly.
     return {
-      durationSeconds: timeSelection.timeframe.durationSeconds,
-      intervalSeconds: timeSelection.timeframe.intervalSeconds,
+      durationSeconds: duration,
+      intervalSeconds: config.interval && config.interval > 0 ? config.interval : timeframeInterval,
     }
-  }, [timeSelection, fromTime, toTime])
+  }, [timeSelection, fromTime, toTime, config.interval])
   // Get data from context (batched fetch)
   const { series, loading, error } = useMetricData(widgetId)
 

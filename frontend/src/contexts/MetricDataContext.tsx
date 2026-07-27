@@ -46,6 +46,7 @@ export function MetricDataProvider({ children }: MetricDataProviderProps) {
       name: widget.config.metricName!,
       service: widget.config.service,
       aggregate: widget.widgetType === WIDGET_TYPES.METRIC_VALUE,
+      interval: widget.config.interval,
     }))
   }, [metricWidgets])
 

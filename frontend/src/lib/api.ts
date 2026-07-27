@@ -102,6 +102,7 @@ export interface MetricQuery {
   name: string
   service?: string
   aggregate?: boolean
+  interval?: number // Overrides the batch-level bucket size, in seconds
 }
 
 export interface MetricQueryResult {

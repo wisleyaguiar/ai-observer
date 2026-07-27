@@ -1158,6 +1158,62 @@ func TestQueryBatchMetricSeries_AggregateRespectsTimeRange(t *testing.T) {
 	}
 }
 
+// A per-query Interval must override the batch-level one, so one widget can be
+// pinned to its own bucket (e.g. 5h) while the rest follow the dashboard.
+func TestQueryBatchMetricSeries_PerQueryIntervalOverridesBatch(t *testing.T) {
+	store, cleanup := setupTestStore(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	now := time.Now().Truncate(time.Hour)
+	from := now.Add(-5 * time.Hour)
+
+	// One point per hour over the 5h window
+	metrics := make([]api.MetricDataPoint, 0, 5)
+	for i := 1; i <= 5; i++ {
+		metrics = append(metrics, api.MetricDataPoint{
+			Timestamp:   now.Add(-time.Duration(i)*time.Hour + time.Minute),
+			ServiceName: "svc-a",
+			MetricName:  "bucket_probe",
+			MetricType:  "sum",
+			Value:       ptrFloat64(2.0),
+		})
+	}
+	if err := store.InsertMetrics(ctx, metrics); err != nil {
+		t.Fatalf("InsertMetrics failed: %v", err)
+	}
+
+	resp := store.QueryBatchMetricSeries(ctx, []api.MetricQuery{
+		{ID: "hourly", Name: "bucket_probe"},
+		{ID: "five-hour", Name: "bucket_probe", Interval: 5 * 3600},
+	}, from, now, 3600)
+
+	buckets := map[string]int{}
+	totals := map[string]float64{}
+	for _, r := range resp.Results {
+		if !r.Success {
+			t.Fatalf("query %q failed: %v", r.ID, r.Error)
+		}
+		if len(r.Series) != 1 {
+			t.Fatalf("query %q: expected 1 series, got %d", r.ID, len(r.Series))
+		}
+		for _, dp := range r.Series[0].DataPoints {
+			totals[r.ID] += dp[1]
+		}
+		buckets[r.ID] = len(r.Series[0].DataPoints)
+	}
+
+	if buckets["five-hour"] >= buckets["hourly"] {
+		t.Errorf("expected fewer buckets at 5h (%d) than at 1h (%d)", buckets["five-hour"], buckets["hourly"])
+	}
+	if totals["hourly"] != totals["five-hour"] {
+		t.Errorf("re-bucketing changed the total: 1h=%v, 5h=%v", totals["hourly"], totals["five-hour"])
+	}
+	if totals["hourly"] != 10.0 {
+		t.Errorf("expected total 10, got %v", totals["hourly"])
+	}
+}
+
 func TestQueryMetricSeries_CodexUsageSumsHistoricalCumulativeRows(t *testing.T) {
 	store, cleanup := setupTestStore(t)
 	defer cleanup()

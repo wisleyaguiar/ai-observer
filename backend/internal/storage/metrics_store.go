@@ -616,8 +616,14 @@ func (s *DuckDBStore) QueryBatchMetricSeries(ctx context.Context, queries []api.
 				return
 			}
 
+			// Per-query interval wins over the batch-level one when set
+			queryInterval := intervalSeconds
+			if q.Interval > 0 {
+				queryInterval = normalizeIntervalSeconds(q.Interval)
+			}
+
 			// Execute the query using internal method
-			resp, err := s.queryMetricSeriesInternal(ctx, q.Name, q.Service, from, to, intervalSeconds, q.Aggregate, typeInfo)
+			resp, err := s.queryMetricSeriesInternal(ctx, q.Name, q.Service, from, to, queryInterval, q.Aggregate, typeInfo)
 			if err != nil {
 				result.Success = false
 				result.Error = err.Error()

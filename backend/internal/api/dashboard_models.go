@@ -35,6 +35,9 @@ type WidgetConfig struct {
 	BreakdownValue     string `json:"breakdownValue,omitempty"`
 	ChartStacked       *bool  `json:"chartStacked,omitempty"`
 	LogSearch          string `json:"logSearch,omitempty"`
+	// Interval pins this widget's bucket size in seconds, independent of the
+	// dashboard timeframe (e.g. 18000 for the 5h rate-limit window).
+	Interval int64 `json:"interval,omitempty"`
 }
 
 // DashboardWithWidgets represents a full dashboard with its widgets

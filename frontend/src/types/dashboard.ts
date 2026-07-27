@@ -5,6 +5,7 @@ export interface WidgetConfig {
   breakdownValue?: string // Specific breakdown value to filter by (for metric_value widgets)
   chartStacked?: boolean // Whether to stack bars (default: true)
   logSearch?: string // Free-text/event-name filter for recent_logs widgets (e.g., "user_prompt")
+  interval?: number // Bucket size in seconds, independent of the dashboard timeframe (e.g. 18000 for 5h blocks)
 }
 
 export interface DashboardWidget {
