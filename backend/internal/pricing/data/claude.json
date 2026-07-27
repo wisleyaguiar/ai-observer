@@ -1,7 +1,19 @@
 {
   "provider": "anthropic",
-  "lastUpdated": "2026-06-13T00:00:00Z",
+  "lastUpdated": "2026-07-26T00:00:00Z",
   "models": {
+    "claude-opus-5": {
+      "inputCostPerMTok": 5,
+      "outputCostPerMTok": 25,
+      "cacheReadCostPerMTok": 0.5,
+      "cacheWriteCostPerMTok": 6.25
+    },
+    "claude-sonnet-5": {
+      "inputCostPerMTok": 3,
+      "outputCostPerMTok": 15,
+      "cacheReadCostPerMTok": 0.3,
+      "cacheWriteCostPerMTok": 3.75
+    },
     "claude-fable-5": {
       "inputCostPerMTok": 10,
       "outputCostPerMTok": 50,

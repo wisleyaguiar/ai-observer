@@ -13,6 +13,8 @@ func TestClaudePricingLoaded(t *testing.T) {
 
 	// Verify expected models exist
 	models := []string{
+		"claude-opus-5",
+		"claude-sonnet-5",
 		"claude-fable-5",
 		"claude-mythos-5",
 		"claude-opus-4-8",
@@ -308,6 +310,42 @@ func TestCalculateClaudeCost(t *testing.T) {
 	expected := 0.01089
 	if *cost < expected*0.99 || *cost > expected*1.01 {
 		t.Errorf("Expected cost ~%v, got %v", expected, *cost)
+	}
+}
+
+// TestClaude5RatesMatchAPI pins the Claude 5 rates that were reconciled against
+// real claude_code.cost.usage telemetry (residual cache-write rate landed exactly
+// on 1.25x input for 5m TTL and 2x input for 1h TTL, which only holds if the
+// input/output/cacheRead rates below are right).
+func TestClaude5RatesMatchAPI(t *testing.T) {
+	tests := []struct {
+		model                                string
+		input, output, cacheRead, cacheWrite float64 // $/MTok
+	}{
+		{"claude-opus-5", 5, 25, 0.5, 6.25},
+		{"claude-sonnet-5", 3, 15, 0.3, 3.75},
+	}
+
+	for _, tt := range tests {
+		p := GetClaudePricing(tt.model)
+		if p == nil {
+			t.Errorf("%s not in pricing table", tt.model)
+			continue
+		}
+		for _, c := range []struct {
+			name          string
+			got, wantMTok float64
+		}{
+			{"input", p.InputCostPerToken, tt.input},
+			{"output", p.OutputCostPerToken, tt.output},
+			{"cacheRead", p.CacheReadCostPerToken, tt.cacheRead},
+			{"cacheWrite", p.CacheWriteCostPerToken, tt.cacheWrite},
+		} {
+			want := c.wantMTok / 1e6
+			if math.Abs(c.got-want) > want*1e-9 {
+				t.Errorf("%s %s: got %v, want %v", tt.model, c.name, c.got, want)
+			}
+		}
 	}
 }
 

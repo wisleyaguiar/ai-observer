@@ -162,6 +162,8 @@ func GenerateClaudeJSON(models []FetchedModelInfo, pricing []FetchedPricingInfo)
 	// In a full implementation, this would merge fetched data with known models
 
 	// Claude 5 series
+	addModelWithCache("claude-opus-5", 5, 25, nil, false)
+	addModelWithCache("claude-sonnet-5", 3, 15, nil, false)
 	addModelWithCache("claude-fable-5", 10, 50, nil, false)
 	addModelWithCache("claude-mythos-5", 10, 50, nil, false)
 
