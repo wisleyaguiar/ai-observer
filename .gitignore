@@ -45,6 +45,12 @@ data/*.duckdb
 data/*.duckdb.wal
 data/*.duckdb.wal.checkpoint
 
+# Local DuckDB volume (contains real telemetry: emails, account ids, prompts)
+ai-observer-data/
+
+# Serena MCP workspace cache
+.serena/
+
 # Embedded frontend build output
 backend/internal/frontend/dist/
 

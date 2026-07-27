@@ -1,5 +1,8 @@
 ARG GOLANG_VERSION=1.26
-ARG TARGETARCH=amd64
+# Filled in by BuildKit from the target platform. Never give this a default:
+# a hardcoded one silently wins over the real platform and the runtime stage
+# ends up on a different arch than the binary the builder produced.
+ARG TARGETARCH
 ARG VERSION=dev
 ARG GIT_COMMIT=unknown
 ARG BUILD_DATE=unknown
@@ -16,7 +19,6 @@ RUN apt-get update && apt-get install -y build-essential pkg-config \
     && npm install -g pnpm \
     && rm -rf /var/lib/apt/lists/*
 
-ARG TARGETARCH
 ARG VERSION
 ARG GIT_COMMIT
 ARG BUILD_DATE
@@ -45,7 +47,9 @@ RUN CGO_ENABLED=1 make all
 RUN mkdir -p /app/data
 
 # Runtime stage - distroless for minimal attack surface
-FROM --platform=linux/${TARGETARCH} gcr.io/distroless/cc-debian12:nonroot
+# No --platform here: BuildKit already builds every stage for the target
+# platform, so this matches the builder instead of overriding it.
+FROM gcr.io/distroless/cc-debian12:nonroot
 
 WORKDIR /app
 COPY --from=builder /app/bin/ai-observer /app/ai-observer
